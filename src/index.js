@@ -87,7 +87,7 @@ const main = function(options) {
         const dy = py - y;
         const d = Math.sqrt(dx * dx + dy * dy);
         const e = d / (this.constants.maxd * this.constants.pointCount);
-        const power = 1.0;
+        const power = this.constants.lightDecay;
         const e2 = Math.pow(this.constants.maxe, power) / (e == 0.0 ? 1.0 : Math.pow(e, power));
         r += pointsColorR[i] * e2;
         g += pointsColorG[i] * e2;
@@ -100,6 +100,7 @@ const main = function(options) {
         pointCount,
         maxd,
         maxe,
+        lightDecay: options.lightDecay
       },
       output: [w, h]
     });
@@ -145,7 +146,8 @@ const datgui = function() {
     height: defsize,
     pointCount: 100,
     pointsRandomColor: true,
-    pointsColor: [0, 0, 0, 0]
+    pointsColor: [0, 0, 0, 0],
+    lightDecay: 1.0
   };
   const reset = function() {
     main(options);
@@ -159,6 +161,8 @@ const datgui = function() {
   points.add(options, 'pointCount', 0, 1000).onFinishChange(reset);
   points.add(options, 'pointsRandomColor').onFinishChange(reset);
   points.addColor(options, 'pointsColor').onFinishChange(reset);
+  const lights = gui.addFolder('Light Options');
+  lights.add(options, 'lightDecay', 0.0, 10.0).onFinishChange(reset);
   reset();
 };
 

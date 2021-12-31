@@ -1,6 +1,8 @@
 // Import stylesheets
 import './style.css';
 
+const GPU = require('gpu.js');
+
 const w = 600;
 const h = 600;
 
@@ -33,6 +35,27 @@ for (let i = 0; i < pointCount; i++) {
   points.push(point);
 }
 
+const generateMatrices = () => {
+  const matrices = [[], []];
+  for (let y = 0; y < h; y++) {
+    matrices[0].push([]);
+    for (let x = 0; x < w; x++) {
+      matrices[0][y].push(Math.random());
+    }
+  }
+  return matrices[0];
+};
+
+const gpu = new GPU();
+const process = gpu
+  .createKernel(function () {
+    return [1, 0, 0, 0];
+  })
+  .setOutput([w, h]);
+
+const matrix = generateMatrices();
+const out = process();
+
 const colors = {};
 const combine = (a, b) => a + b;
 const f = (x) => Math.max(0, Math.min(255, Math.floor(x * 255)));
@@ -49,7 +72,7 @@ for (let i = 0; i < pointCount; i++) {
       const dy = point.y - y;
       const d = Math.sqrt(dx * dx + dy * dy);
       const e = d / (maxd * pointCount);
-      const e2 = (200.0 * 0.000001) / (e * e);
+      const e2 = (10.0 * 0.000001) / (e * e);
 
       r += point.color.r * e2;
       g += point.color.g * e2;
@@ -65,6 +88,7 @@ for (let i = 0; i < pointCount; i++) {
         g,
         b,
       };
+      [r, g, b, a] = out[x][y];
       data.data[idx + 0] = f(r);
       data.data[idx + 1] = f(g);
       data.data[idx + 2] = f(b);

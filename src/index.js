@@ -196,38 +196,8 @@ const main = function(options) {
       .append(canvas);
   }
 
-  const ctx = canvas.getContext('2d');
   $("#mainImage")
     .css('border', '1px solid white')
-
-  const data = ctx.createImageData(w, h);
-
-  const points = [];
-  const pointCount = options.pointsEnabled ? options.pointCount : 1;
-  const pointsX = new Float32Array(pointCount);
-  const pointsY = new Float32Array(pointCount);
-  const pointsColorR = new Float32Array(pointCount);
-  const pointsColorG = new Float32Array(pointCount);
-  const pointsColorB = new Float32Array(pointCount);
-
-  for (let i = 0; i < pointCount; i++) {
-    const c = {
-      r: options.pointsRandomColor ? Math.random() : options.pointsColor[0],
-      g: options.pointsRandomColor ? Math.random() : options.pointsColor[1],
-      b: options.pointsRandomColor ? Math.random() : options.pointsColor[2],
-    };
-    const point = {
-      x: Math.floor(Math.random() * w),
-      y: Math.floor(Math.random() * h),
-      color: c,
-    };
-    points.push(point);
-    pointsX[i] = point.x;
-    pointsY[i] = point.y;
-    pointsColorR[i] = point.color.r;
-    pointsColorG[i] = point.color.g;
-    pointsColorB[i] = point.color.b;
-  }
 
 	const ws = options.shapeWidth;
 	const hs = options.shapeHeight;
@@ -241,9 +211,9 @@ const main = function(options) {
   for (let i = 0; i < shapeCount; i++) {
     const shape = createShape(simplex, ws, hs);
     const color = {
-      r: Math.random(),
-      g: Math.random(),
-      b: Math.random()
+      r: options.shapesRandomColor ? Math.random() : options.shapesColor[0],
+      g: options.shapesRandomColor ? Math.random() : options.shapesColor[1],
+      b: options.shapesRandomColor ? Math.random() : options.shapesColor[2],
     };
     shapeColors[i * 3 + 0] = color.r;
     shapeColors[i * 3 + 1] = color.g;
@@ -296,8 +266,7 @@ const main = function(options) {
     }
   }
 
-
-  const gpu = new GPU.GPU();
+  const gpu = new GPU.GPU({ canvas: canvas });
 	addNoiseFunctions(gpu);
   function lerp2(x, y, a) {
     return x * (1.0 - a) + y * a;
@@ -324,12 +293,12 @@ const main = function(options) {
     const bc2 = 0.5 * bc1 + 1.0;
           
     // Light emission from shape
-    const d = Math.max(1.0, Math.abs(currentRadius - vradius2));
-    const e = d / (this.constants.maxd * this.constants.pointCount);
+    const da = Math.max(1.0, Math.abs(currentRadius - vradius2));
+    const d = currentRadius <= vradius2 && this.constants.shapeInteriors ? 1.0 : da;
+    const e = d / (this.constants.maxd * this.constants.shapeCount);
     const power = this.constants.lightDecay;
     const light = 1.0 * Math.pow(this.constants.maxe, power) / (e == 0.0 ? 1.0 : Math.pow(e, power));
-    //const lightedShape = bc2 * Math.min(1.0, light);
-    const lightedShape = bc2 * light;
+    const lightedShape = light;
 
     const shape = currentRadius <= vradius2 ? lightedShape : 1.0 * lightedShape;
 
@@ -338,100 +307,63 @@ const main = function(options) {
 	gpu.setFunctions([lerp2, snoise3, createShapeGPU]);
 
   const maxd = Math.sqrt(w * w + h * h);
-  const maxe = 1.0 / pointCount;
+  const maxe = 1.0 / shapeCount;
   const process = gpu
     .createKernel(function (
-      iteration, out, pointsX, pointsY, pointsColorR, pointsColorG, pointsColorB,
+      iteration, out, //pointsX, pointsY, pointsColorR, pointsColorG, pointsColorB,
       shapeLocations, shapeColors, shapeSizes, shapeAllocations) {
       const x = this.thread.x;
       const y = this.thread.y;
-      const prev = out[x][y];
+      const prev = out[y][x];
       let r = prev[0];
       let g = prev[1];
       let b = prev[2];
       let a = prev[3];
-      if (this.constants.pointsEnabled) {
-        for (let i = 0; i < this.constants.pointCount; i++) {
-          const px = pointsX[i];
-          const py = pointsY[i];
-          const dx = px - x;
-          const dy = py - y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          const e = d / (this.constants.maxd * this.constants.pointCount);
-          const power = this.constants.lightDecay;
-          const e2 = Math.pow(this.constants.maxe, power) / (e == 0.0 ? 1.0 : Math.pow(e, power));
-          r += pointsColorR[i] * e2;
-          g += pointsColorG[i] * e2;
-          b += pointsColorB[i] * e2;
-        }
-      }
+//      if (this.constants.pointsEnabled) {
+//        for (let i = 0; i < this.constants.pointCount; i++) {
+//          const px = pointsX[i];
+//          const py = pointsY[i];
+//          const dx = px - x;
+//          const dy = py - y;
+//          const d = Math.sqrt(dx * dx + dy * dy);
+//          const e = d / (this.constants.maxd * this.constants.pointCount);
+//          const power = this.constants.lightDecay;
+//          const e2 = Math.pow(this.constants.maxe, power) / (e == 0.0 ? 1.0 : Math.pow(e, power));
+//          r += pointsColorR[i] * e2;
+//          g += pointsColorG[i] * e2;
+//          b += pointsColorB[i] * e2;
+//        }
+//      }
       a = 1.0;
       if (this.constants.shapesEnabled) {
         const ws = this.constants.shapeWidth;
         const hs = this.constants.shapeHeight;
-        if (this.constants.fastShapes) {
-          for (let k = 0; k < this.constants.maxShapesPerPixel; k++) {
-            const kidx =
-              this.constants.maxShapesPerPixel *
-                (Math.floor(y / hs) * Math.ceil(this.constants.width / ws) + Math.floor(x / ws)) + k;
-            if (shapeAllocations[kidx] > 0) {
-              const i = shapeAllocations[kidx] - 1;
-              const shapeVariationIndex = i % this.constants.shapeVariations;
-              const posX = shapeLocations[i * 2];
-              const posY = shapeLocations[i * 2 + 1];
-              const size = shapeSizes[i];
-              const halfws = Math.floor(0.5 * ws * size);
-              const halfhs = Math.floor(0.5 * hs * size);
-              const lx = x - posX;
-              const ly = y - posY;
-              const shapeSeed = shapeVariationIndex;
-              const initRadiusMul = this.constants.randomizeInitRadius ? rand([5 * i, 19 * i]) : 1.0;
-              const spikinessMul = this.constants.randomizeSpikiness ? rand([13 * i, 7 * i]) : 1.0;
-              const ar =
-                createShapeGPU(
-                  this.constants.spikeFrequency,
-                  initRadiusMul * this.constants.initRadius,
-                  spikinessMul * this.constants.spikiness,
-                  shapeSeed,
-                  ws * size,
-                  hs * size,
-                  lx,
-                  ly);
-              r += ar * shapeColors[i * 3 + 0];
-              g += ar * shapeColors[i * 3 + 1];
-              b += ar * shapeColors[i * 3 + 2];
-              a += ar;
-            }
-          }
-        } else {
-          for (let i = iteration; i < iteration + this.constants.shapeCount; i++) {
-            const shapeVariationIndex = i % this.constants.shapeVariations;
-            const posX = shapeLocations[i * 2];
-            const posY = shapeLocations[i * 2 + 1];
-            const size = shapeSizes[i];
-            const halfws = Math.floor(0.5 * ws * size);
-            const halfhs = Math.floor(0.5 * hs * size);
-            const lx = x - posX;
-            const ly = y - posY;
-            const shapeSeed = shapeVariationIndex;
-            const initRadiusMul = this.constants.randomizeInitRadius ? rand([5 * i, 19 * i]) : 1.0;
-            const spikinessMul = this.constants.randomizeSpikiness ? rand([13 * i, 7 * i]) : 1.0;
-            const ar =
-              createShapeGPU(
-                this.constants.spikeFrequency,
-                initRadiusMul * this.constants.initRadius,
-                spikinessMul * this.constants.spikiness,
-                shapeSeed,
-                ws * size,
-                hs * size,
-                lx,
-                ly);
-            r += ar * shapeColors[i * 3 + 0];
-            g += ar * shapeColors[i * 3 + 1];
-            b += ar * shapeColors[i * 3 + 2];
-            a += ar;
-          }
-        }
+        const i = iteration;
+        const shapeVariationIndex = i % this.constants.shapeVariations;
+        const posX = shapeLocations[i * 2];
+        const posY = shapeLocations[i * 2 + 1];
+        const size = shapeSizes[i];
+        const halfws = Math.floor(0.5 * ws * size);
+        const halfhs = Math.floor(0.5 * hs * size);
+        const lx = x - posX;
+        const ly = y - posY;
+        const shapeSeed = shapeVariationIndex;
+        const initRadiusMul = this.constants.randomizeInitRadius ? rand([5 * i, 19 * i]) : 1.0;
+        const spikinessMul = this.constants.randomizeSpikiness ? rand([13 * i, 7 * i]) : 1.0;
+        const ar =
+          createShapeGPU(
+            this.constants.spikeFrequency,
+            initRadiusMul * this.constants.initRadius,
+            spikinessMul * this.constants.spikiness,
+            shapeSeed,
+            ws * size,
+            hs * size,
+            lx,
+            ly);
+        r += ar * shapeColors[i * 3 + 0];
+        g += ar * shapeColors[i * 3 + 1];
+        b += ar * shapeColors[i * 3 + 2];
+        a += ar;
       }
       return [r, g, b, 1];
     },
@@ -439,9 +371,8 @@ const main = function(options) {
       constants: {
         width: w,
         height: h,
-        pointsEnabled: options.pointsEnabled,
         shapesEnabled: options.shapesEnabled,
-        pointCount,
+        shapeCount: options.shapeCount,
         maxd,
         maxe,
         lightDecay: options.lightDecay,
@@ -454,137 +385,150 @@ const main = function(options) {
         randomizeInitRadius: options.randomizeInitRadius,
         randomizeSpikiness: options.randomizeSpikiness,
         spikeFrequency: options.spikeFrequency,
-        fastShapes: options.fastShapes,
-        maxShapesPerPixel
+        shapeInteriors: options.shapeInteriors,
+        maxShapesPerPixel,
       },
       output: [w, h],
       immutable: true,
       pipeline: true
-    });
+    }).setPipeline(true);
 
   const before = new Date().getTime();
   let temp = gpu.createKernel(function() { return [0, 0, 0, 0]; }).setPipeline(true).setOutput([w, h])();
   for (let i = 0; i < shapeCount; i++) {
     const temp2 =
       process(i, temp,
-        pointsX, pointsY, pointsColorR, pointsColorG, pointsColorB,
+        //pointsX, pointsY, pointsColorR, pointsColorG, pointsColorB,
         shapeLocations, shapeColors, shapeSizes, shapeAllocations);
     temp.delete();
     temp = temp2;
   }
-  const out = temp.toArray();
-  temp.delete();
+	
+	const maxrows = gpu.createKernel(function(image) {
+			let pixel = [0, 0, 0, 0];
+			for (let x = 0; x < this.constants.width; x++) {
+				const p2 = image[this.thread.y][x];
+		    const r = Math.max(pixel[0], p2[0]);	
+		    const g = Math.max(pixel[1], p2[1]);
+		    const b = Math.max(pixel[2], p2[2]);	
+		    const a = Math.max(pixel[3], p2[3]);	
+        pixel = [r, g, b, a];
+			}
+			return pixel;
+		})
+    .setConstants({
+      width: w,
+      height: h
+    })
+    .setPipeline(true)
+ 		.setOutput([h]);
+	const maxrowsOutput = maxrows(temp);
+
+  const maxcols = gpu.createKernel(function(image) {
+			let pixel = [0, 0, 0, 0];
+			for (let y = 0; y < this.constants.height; y++) {
+				const p2 = image[y];
+		    const r = Math.max(pixel[0], p2[0]);	
+		    const g = Math.max(pixel[1], p2[1]);
+		    const b = Math.max(pixel[2], p2[2]);	
+		    const a = Math.max(pixel[3], p2[3]);	
+        pixel = [r, g, b, a];
+			}
+			const m1 = Math.max(pixel[0], pixel[1]);
+      const m2 = Math.max(pixel[2], m1);
+      return 1.0e-1 / m2;
+		})
+    .setConstants({
+      width: w,
+      height: h
+    })
+    .setPipeline(true)
+ 		.setOutput([1]);
+	const normalize = maxcols(maxrowsOutput);
+
+	const kernel = gpu.createKernel(function(image, brightness, normalize) {
+			const pixel = image[this.thread.y][this.thread.x];
+      const n = brightness * normalize[0];
+			this.color(pixel[0] * n, pixel[1] * n, pixel[2] * n, pixel[3] * n);
+		})
+		.setGraphical(true)
+ 		.setOutput([w, h]);
+	kernel(temp, options.brightness, normalize);
+  //ctx.drawImage(kernel.getCanvas(), 0, 0)
+  // $("body").append(kernel.canvas);
+
   const after = new Date().getTime();
   const elapsed = after - before;
   console.log("Time elapsed:", elapsed / 1000.0);
 
-  // Get normalize factor
-  let [maxr, maxg, maxb] = [0.0, 0.0, 0.0];
-  let [avgr, avgg, avgb] = [0.0, 0.0, 0.0];
-  const avg = (a, b) => a + b;
-  const rs = [];
-  const gs = [];
-  const bs = [];
-  for (let x = 0; x < w; x++) {
-    for (let y = 0; y < h; y++) {
-      const [r, g, b, a] = out[x][y];
-      [maxr, maxg, maxb] = [Math.max(maxr, r), Math.max(maxg, g), Math.max(maxb, b)];
-      [avgr, avgg, avgb] = [avg(avgr, r), avg(avgg, g), avg(avgb, b)];
-      rs.push(r);
-      gs.push(g);
-      bs.push(b);
-    }
-  }
-  rs.sort();
-  gs.sort();
-  bs.sort();
-  const meanr = rs[Math.floor(rs.length * 0.5)];
-  const meang = gs[Math.floor(gs.length * 0.5)];
-  const meanb = bs[Math.floor(bs.length * 0.5)];
+  const out = temp.toArray();
+  temp.delete();
 
-  let [stddevr, stddevg, stddevb] = [0.0, 0.0, 0.0];
-  const sq = x => x * x;
+  // Get normalize factor
+//  let [maxr, maxg, maxb] = [0.0, 0.0, 0.0];
+//  let [avgr, avgg, avgb] = [0.0, 0.0, 0.0];
+//  const avg = (a, b) => a + b;
+//  const rs = [];
+//  const gs = [];
+//  const bs = [];
 //  for (let x = 0; x < w; x++) {
 //    for (let y = 0; y < h; y++) {
 //      const [r, g, b, a] = out[x][y];
-//      stddevr += sq(r - meanr);
-//      stddevg += sq(g - meang);
-//      stddevb += sq(b - meanb);
+//      [maxr, maxg, maxb] = [Math.max(maxr, r), Math.max(maxg, g), Math.max(maxb, b)];
+//      [avgr, avgg, avgb] = [avg(avgr, r), avg(avgg, g), avg(avgb, b)];
+//      rs.push(r);
+//      gs.push(g);
+//      bs.push(b);
 //    }
 //  }
-  const lbound = Math.floor(rs.length * 0.0);
-  const ubound = Math.floor(rs.length * 1.0 - 1.0e-3);
-  for (let i = lbound; i < ubound; i++) {
-    stddevr += sq(rs[i] - meanr);
-    stddevg += sq(gs[i] - meang);
-    stddevb += sq(bs[i] - meanb);
-  }
-  stddevr = Math.sqrt(stddevr);
-  stddevg = Math.sqrt(stddevg);
-  stddevb = Math.sqrt(stddevb);
+//  rs.sort();
+//  gs.sort();
+//  bs.sort();
+//  const meanr = rs[Math.floor(rs.length * 0.5)];
+//  const meang = gs[Math.floor(gs.length * 0.5)];
+//  const meanb = bs[Math.floor(bs.length * 0.5)];
 
-//  const m = 1.0;
-//  const [mr, mg, mb] =
-//    [
-//      m / (stddevr == 0 || avgr == 0 ? m : (stddevr / avgr)),
-//      m / (stddevg == 0 || avgg == 0 ? m : (stddevg / avgg)),
-//      m / (stddevb == 0 || avgb == 0 ? m : (stddevb / avgb))
-//    ];
-//  const m = 1.0e-3 * options.brightness;
-//  const [mr, mg, mb] =
-//    [
-//      m / (avgr == 0 ? m : avgr),
-//      m / (avgg == 0 ? m : avgg),
-//      m / (avgb == 0 ? m : avgb)
-//    ];
-//  console.log(mr, mg, mb);
+//  let [stddevr, stddevg, stddevb] = [0.0, 0.0, 0.0];
+//  const sq = x => x * x;
+//  const lbound = Math.floor(rs.length * 0.0);
+//  const ubound = Math.floor(rs.length * 1.0 - 1.0e-3);
+//  for (let i = lbound; i < ubound; i++) {
+//    stddevr += sq(rs[i] - meanr);
+//    stddevg += sq(gs[i] - meang);
+//    stddevb += sq(bs[i] - meanb);
+//  }
+//  stddevr = Math.sqrt(stddevr);
+//  stddevg = Math.sqrt(stddevg);
+//  stddevb = Math.sqrt(stddevb);
 
-//  const sf = 1.0;
-//  const minr = meanr - sf * stddevr;
-//  const ming = meang - sf * stddevg;
-//  const minb = meanb - sf * stddevb;
-//  console.log(
-//    "mean", meanr, meang, meanb,
-//    "min", minr, ming, minb,
-//    "std", stddevr, stddevg, stddevb);
-//  const maxr = avgr + sf * stddevr;
-//  const maxg = avgg + sf * stddevg;
-//  const maxb = avgb + sf * stddevb;
-//  const lr = rs[lbound];
-//  const lg = gs[lbound];
-//  const lb = bs[lbound];
-  const lr = 0;
-  const lg = 0;
-  const lb = 0;
-  const mm = Math.max(Math.max(rs[ubound], gs[ubound]), bs[ubound]);
-  const mr = mm;
-  const mg = mm;
-  const mb = mm;
-  const dr = mr - lr;
-  const dg = mg - lg;
-  const db = mb - lb;
+//  const lr = 0;
+//  const lg = 0;
+//  const lb = 0;
+//  const mm = Math.max(Math.max(rs[ubound], gs[ubound]), bs[ubound]);
+//  const mr = mm;
+//  const mg = mm;
+//  const mb = mm;
+//  const dr = mr - lr;
+//  const dg = mg - lg;
+//  const db = mb - lb;
 
-  const f = (x) => Math.max(0, Math.min(255, Math.floor(options.brightness * x * 255)));
-  const ex = x => x;
-  for (let x = 0; x < w; x++) {
-    for (let y = 0; y < h; y++) {
-      const idx = 4 * (y * w + x);
-      const [r, g, b, a] = out[x][y];
-//      const r2 = ex((r - minr) / (sf * stddevr));
-//      const g2 = ex((g - ming) / (sf * stddevg));
-//      const b2 = ex((b - minb) / (sf * stddevb));
-      const r2 = (r - lr) / dr;
-      const g2 = (g - lg) / dg;
-      const b2 = (b - lb) / db;
-      //console.log(r, r2, g, g2, b, b2); break;
-      data.data[idx + 0] = f(r2);
-      data.data[idx + 1] = f(g2);
-      data.data[idx + 2] = f(b2);
-      data.data[idx + 3] = f(a);
-    }
-  }
+//  const f = (x) => Math.max(0, Math.min(255, Math.floor(options.brightness * x * 255)));
+//  const ex = x => x;
+//  for (let x = 0; x < w; x++) {
+//    for (let y = 0; y < h; y++) {
+//      const idx = 4 * (y * w + x);
+//      const [r, g, b, a] = out[x][y];
+//      const r2 = (r - lr) / dr;
+//      const g2 = (g - lg) / dg;
+//      const b2 = (b - lb) / db;
+//      data.data[idx + 0] = f(r2);
+//      data.data[idx + 1] = f(g2);
+//      data.data[idx + 2] = f(b2);
+//      data.data[idx + 3] = f(a);
+//    }
+//  }
 
-  ctx.putImageData(data, 0, 0);
+  //ctx.putImageData(data, 0, 0);
 };
 
 const datgui = function() {
@@ -596,13 +540,11 @@ const datgui = function() {
     width: defsize,
     height: defsize,
     brightness: 1,
-    pointsEnabled: true,
-    pointCount: 100,
-    pointsRandomColor: true,
-    pointsColor: [0, 0, 0, 0],
     lightDecay: 1.0,
     shapesEnabled: true,
-    fastShapes: false,
+    shapeInteriors: false,
+    shapesRandomColor: true,
+    shapesColor: [0, 0, 0, 0],
     shapeCount: 100,
     shapeVariations: 10,
     shapeDistribution: 'Random',
@@ -626,16 +568,13 @@ const datgui = function() {
   size.add(options, 'width', 0, 10000).onFinishChange(reset);
   size.add(options, 'height', 0, 10000).onFinishChange(reset);
   size.add(options, 'brightness', 0, 10000).onFinishChange(reset);
-  const points = gui.addFolder('Point Options');
-  points.add(options, 'pointsEnabled').onFinishChange(reset);
-  points.add(options, 'pointCount', 0, 1000).onFinishChange(reset);
-  points.add(options, 'pointsRandomColor').onFinishChange(reset);
-  points.addColor(options, 'pointsColor').onFinishChange(reset);
   const lights = gui.addFolder('Light Options');
   lights.add(options, 'lightDecay', 0.0, 10.0).onFinishChange(reset);
   const shapes = gui.addFolder('Shape Options');
   shapes.add(options, 'shapesEnabled').onFinishChange(reset);
-  shapes.add(options, 'fastShapes').onFinishChange(reset);
+  shapes.add(options, 'shapeInteriors').onFinishChange(reset);
+  shapes.add(options, 'shapesRandomColor').onFinishChange(reset);
+  shapes.addColor(options, 'shapesColor').onFinishChange(reset);
   shapes.add(options, 'shapeWidth', 0.0, 500.0).onFinishChange(reset);
   shapes.add(options, 'shapeHeight', 0.0, 500.0).onFinishChange(reset);
   shapes.add(options, 'shapeCount', 0, 1000).onFinishChange(reset);

@@ -1,6 +1,3 @@
-// Import stylesheets
-import './style.css';
-
 import GPU from 'gpu.js';
 
 const w = 600;

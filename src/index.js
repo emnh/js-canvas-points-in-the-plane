@@ -298,8 +298,8 @@ const main = function(options) {
     return ret;
   }
   function createShapeGPU(initRadius, spikiness, shapeSeed, ws, hs, x, y) {
-    const dx = x - 0.5 * ws;
-    const dy = y - 0.5 * hs;
+    const dx = x;
+    const dy = y;
     const radius = 0.5 * Math.max(ws, hs);
     const vradius =
       (0.75 + 0.25 * Math.sin(10.0 * Math.atan2(dy, dx))) * radius;
@@ -313,7 +313,17 @@ const main = function(options) {
     const border = currentRadius >= vradius2 && currentRadius <= vradius2 + 1.0;
     const bc1 = snoise3((0.5 * x) / ws, (0.5 * y) / ws, shapeSeed);
     const bc2 = 0.5 * bc1 + 1.0;
-    const shape = currentRadius <= vradius2 ? bc2 : 0.0;
+          
+    // Light emission from shape
+    const d = Math.max(1.0, Math.abs(currentRadius - vradius2));
+    const e = d / (this.constants.maxd * this.constants.pointCount);
+    const power = this.constants.lightDecay;
+    const light = 1.0 * Math.pow(this.constants.maxe, power) / (e == 0.0 ? 1.0 : Math.pow(e, power));
+    //const lightedShape = bc2 * Math.min(1.0, light);
+    const lightedShape = bc2 * light;
+
+    const shape = currentRadius <= vradius2 ? lightedShape : 1.0 * lightedShape;
+
     return shape;
   };
 	gpu.setFunctions([lerp2, snoise3, createShapeGPU]);
@@ -355,10 +365,13 @@ const main = function(options) {
         const size = shapeSizes[i];
         const halfws = Math.floor(0.5 * ws * size);
         const halfhs = Math.floor(0.5 * hs * size);
-        if (x >= posX - halfws && x < posX + halfws && y >= posY - halfhs && y < posY + halfhs) {
-          const lx = x - (posX - halfws);
-          const ly = y - (posY - halfhs);
+        //if (x >= posX - halfws && x < posX + halfws && y >= posY - halfhs && y < posY + halfhs) {
+//          const lx = x - (posX - halfws);
+//          const ly = y - (posY - halfhs);
+          const lx = x - posX;
+          const ly = y - posY;
           const shapeSeed = shapeVariationIndex;
+
           const ar =
             createShapeGPU(
               this.constants.initRadius, this.constants.spikiness, shapeSeed, ws * size, hs * size, lx, ly);
@@ -366,7 +379,8 @@ const main = function(options) {
           g += ar * shapeColors[i * 3 + 1];
           b += ar * shapeColors[i * 3 + 2];
           a += ar;
-        }
+
+        //}
       }
       return [r, g, b, 1];
     },
@@ -396,27 +410,103 @@ const main = function(options) {
   let [maxr, maxg, maxb] = [0.0, 0.0, 0.0];
   let [avgr, avgg, avgb] = [0.0, 0.0, 0.0];
   const avg = (a, b) => a + b;
+  const rs = [];
+  const gs = [];
+  const bs = [];
   for (let x = 0; x < w; x++) {
     for (let y = 0; y < h; y++) {
       const [r, g, b, a] = out[x][y];
       [maxr, maxg, maxb] = [Math.max(maxr, r), Math.max(maxg, g), Math.max(maxb, b)];
       [avgr, avgg, avgb] = [avg(avgr, r), avg(avgg, g), avg(avgb, b)];
+      rs.push(r);
+      gs.push(g);
+      bs.push(b);
     }
   }
-  const m = w * h * 0.5;
-  [avgr, avgg, avgb] = [m / (avgr == 0 ? m : avgr), m / (avgg == 0 ? m : avgg), m / (avgb == 0 ? m : avgb)];
-  if (!options.pointsEnabled) {
-    [avgr, avgg, avgb] = [1, 1, 1];
-  }
+  rs.sort();
+  gs.sort();
+  bs.sort();
+  const meanr = rs[Math.floor(rs.length * 0.5)];
+  const meang = gs[Math.floor(gs.length * 0.5)];
+  const meanb = bs[Math.floor(bs.length * 0.5)];
 
-  const f = (x) => Math.max(0, Math.min(255, Math.floor(x * 255)));
+  let [stddevr, stddevg, stddevb] = [0.0, 0.0, 0.0];
+  const sq = x => x * x;
+//  for (let x = 0; x < w; x++) {
+//    for (let y = 0; y < h; y++) {
+//      const [r, g, b, a] = out[x][y];
+//      stddevr += sq(r - meanr);
+//      stddevg += sq(g - meang);
+//      stddevb += sq(b - meanb);
+//    }
+//  }
+  const lbound = Math.floor(rs.length * 0.0);
+  const ubound = Math.floor(rs.length * 1.0 - 1.0e-3);
+  for (let i = lbound; i < ubound; i++) {
+    stddevr += sq(rs[i] - meanr);
+    stddevg += sq(gs[i] - meang);
+    stddevb += sq(bs[i] - meanb);
+  }
+  stddevr = Math.sqrt(stddevr);
+  stddevg = Math.sqrt(stddevg);
+  stddevb = Math.sqrt(stddevb);
+
+//  const m = 1.0;
+//  const [mr, mg, mb] =
+//    [
+//      m / (stddevr == 0 || avgr == 0 ? m : (stddevr / avgr)),
+//      m / (stddevg == 0 || avgg == 0 ? m : (stddevg / avgg)),
+//      m / (stddevb == 0 || avgb == 0 ? m : (stddevb / avgb))
+//    ];
+//  const m = 1.0e-3 * options.brightness;
+//  const [mr, mg, mb] =
+//    [
+//      m / (avgr == 0 ? m : avgr),
+//      m / (avgg == 0 ? m : avgg),
+//      m / (avgb == 0 ? m : avgb)
+//    ];
+//  console.log(mr, mg, mb);
+
+//  const sf = 1.0;
+//  const minr = meanr - sf * stddevr;
+//  const ming = meang - sf * stddevg;
+//  const minb = meanb - sf * stddevb;
+//  console.log(
+//    "mean", meanr, meang, meanb,
+//    "min", minr, ming, minb,
+//    "std", stddevr, stddevg, stddevb);
+//  const maxr = avgr + sf * stddevr;
+//  const maxg = avgg + sf * stddevg;
+//  const maxb = avgb + sf * stddevb;
+//  const lr = rs[lbound];
+//  const lg = gs[lbound];
+//  const lb = bs[lbound];
+  const lr = 0;
+  const lg = 0;
+  const lb = 0;
+  const mr = rs[ubound];
+  const mg = gs[ubound];
+  const mb = bs[ubound];
+  const dr = mr - lr;
+  const dg = mg - lg;
+  const db = mb - lb;
+
+  const f = (x) => Math.max(0, Math.min(255, Math.floor(options.brightness * x * 255)));
+  const ex = x => x;
   for (let x = 0; x < w; x++) {
     for (let y = 0; y < h; y++) {
       const idx = 4 * (y * w + x);
       const [r, g, b, a] = out[x][y];
-      data.data[idx + 0] = f(r * avgr);
-      data.data[idx + 1] = f(g * avgg);
-      data.data[idx + 2] = f(b * avgb);
+//      const r2 = ex((r - minr) / (sf * stddevr));
+//      const g2 = ex((g - ming) / (sf * stddevg));
+//      const b2 = ex((b - minb) / (sf * stddevb));
+      const r2 = (r - lr) / dr;
+      const g2 = (g - lg) / dg;
+      const b2 = (b - lb) / db;
+      //console.log(r, r2, g, g2, b, b2); break;
+      data.data[idx + 0] = f(r2);
+      data.data[idx + 1] = f(g2);
+      data.data[idx + 2] = f(b2);
       data.data[idx + 3] = f(a);
     }
   }
@@ -432,6 +522,7 @@ const datgui = function() {
     seed: 'hello',
     width: defsize,
     height: defsize,
+    brightness: 1,
     pointsEnabled: true,
     pointCount: 100,
     pointsRandomColor: true,
@@ -454,9 +545,10 @@ const datgui = function() {
   gui.width = 300;
   gui.remember(options);
   gui.add(options, 'seed').onFinishChange(reset);
-  const size = gui.addFolder('Canvas Size');
+  const size = gui.addFolder('Canvas');
   size.add(options, 'width', 0, 10000).onFinishChange(reset);
   size.add(options, 'height', 0, 10000).onFinishChange(reset);
+  size.add(options, 'brightness', 0, 10000).onFinishChange(reset);
   const points = gui.addFolder('Point Options');
   points.add(options, 'pointsEnabled').onFinishChange(reset);
   points.add(options, 'pointCount', 0, 1000).onFinishChange(reset);

@@ -2,7 +2,11 @@ const $ = require('jquery');
 const dat = require('dat.gui');
 import GPU from 'gpu.js';
 
+const seedrandom = require('seedrandom');
+
 const main = function(options) {
+
+  seedrandom(options.seed, { global: true });
 
   console.log(options);
   const w = Math.floor(parseInt(options.width));
@@ -38,7 +42,7 @@ const main = function(options) {
   const data = ctx.createImageData(w, h);
 
   const points = [];
-  const pointCount = 100;
+  const pointCount = options.pointCount;
   const pointsX = new Float32Array(pointCount);
   const pointsY = new Float32Array(pointCount);
   const pointsColorR = new Float32Array(pointCount);
@@ -48,9 +52,9 @@ const main = function(options) {
 
   for (let i = 0; i < pointCount; i++) {
     const c = {
-      r: Math.random(),
-      g: Math.random(),
-      b: Math.random(),
+      r: options.pointsRandomColor ? Math.random() : options.pointsColor[0],
+      g: options.pointsRandomColor ? Math.random() : options.pointsColor[1],
+      b: options.pointsRandomColor ? Math.random() : options.pointsColor[2],
     };
     const point = {
       x: Math.floor(Math.random() * w),
@@ -136,15 +140,25 @@ const datgui = function() {
   gui.useLocalStorage = true;
   const defsize = Math.min(window.innerWidth, window.innerHeight) - 100;
   const options = {
+    seed: 'hello',
     width: defsize,
-    height: defsize
+    height: defsize,
+    pointCount: 100,
+    pointsRandomColor: true,
+    pointsColor: [0, 0, 0, 0]
   };
   const reset = function() {
     main(options);
   };
+  gui.remember(options);
+  gui.add(options, 'seed').onFinishChange(reset);
   const size = gui.addFolder('Canvas Size');
   size.add(options, 'width', 0, 10000).onFinishChange(reset);
   size.add(options, 'height', 0, 10000).onFinishChange(reset);
+  const points = gui.addFolder('Point Options');
+  points.add(options, 'pointCount', 0, 1000).onFinishChange(reset);
+  points.add(options, 'pointsRandomColor').onFinishChange(reset);
+  points.addColor(options, 'pointsColor').onFinishChange(reset);
   reset();
 };
 

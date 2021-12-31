@@ -34,7 +34,7 @@ for (let i = 0; i < pointCount; i++) {
 }
 
 const colors = {};
-const combine = (a, b) => Math.max(a, b);
+const combine = (a, b) => a + b;
 const f = (x) => Math.max(0, Math.min(255, Math.floor(x * 255)));
 const maxd = Math.sqrt(w * w + h * h);
 for (let i = 0; i < pointCount; i++) {
@@ -49,7 +49,8 @@ for (let i = 0; i < pointCount; i++) {
       const dy = point.y - y;
       const d = Math.sqrt(dx * dx + dy * dy);
       const e = d / (maxd * pointCount);
-      const e2 = 1000.0 / e;
+      const e2 = (200.0 * 0.000001) / (e * e);
+
       r += point.color.r * e2;
       g += point.color.g * e2;
       b += point.color.b * e2;

@@ -284,7 +284,7 @@ const main = function(options) {
     const ret = snoise([a, b, c]);
     return ret;
   }
-  function createShapeGPU(initRadius, spikiness, shapeSeed, ws, hs, x, y) {
+  function createShapeGPU(spikeFrequency, initRadius, spikiness, shapeSeed, ws, hs, x, y) {
     const dx = x;
     const dy = y;
     const radius = 0.5 * Math.max(ws, hs);
@@ -292,7 +292,7 @@ const main = function(options) {
       (0.75 + 0.25 * Math.sin(10.0 * Math.atan2(dy, dx))) * radius;
     const angle = Math.atan2(dy, dx) + Math.PI;
     const nangle = angle / Math.PI / 2.0;
-    const c = 1.0;
+    const c = spikeFrequency;
     const from = (initRadius + spikiness * Math.abs(snoise3(c * angle, shapeSeed, 0.0))) * radius;
     const to = (initRadius + spikiness * Math.abs(snoise3(c * -angle, shapeSeed, 0.0))) * radius;
     const vradius2 = lerp2(from, to, nangle);
@@ -364,6 +364,7 @@ const main = function(options) {
             const spikinessMul = this.constants.randomizeSpikiness ? rand([13 * i, 7 * i]) : 1.0;
             const ar =
               createShapeGPU(
+                this.constants.spikeFrequency,
                 initRadiusMul * this.constants.initRadius,
                 spikinessMul * this.constants.spikiness,
                 shapeSeed,
@@ -396,7 +397,8 @@ const main = function(options) {
         initRadius: options.initRadius,
         spikiness: options.spikiness,
         randomizeInitRadius: options.randomizeInitRadius,
-        randomizeSpikiness: options.randomizeSpikiness
+        randomizeSpikiness: options.randomizeSpikiness,
+        spikeFrequency: options.spikeFrequency
       },
       output: [w, h]
     });
@@ -540,7 +542,8 @@ const datgui = function() {
     initRadius: 0.5,
     randomizeInitRadius: false,
     spikiness: 0.5,
-    randomizeSpikiness: false
+    randomizeSpikiness: false,
+		spikeFrequency: 2.0
   };
   const reset = function() {
     main(options);
@@ -573,6 +576,7 @@ const datgui = function() {
   shapes.add(options, 'randomizeInitRadius').onFinishChange(reset);
   shapes.add(options, 'spikiness', 0.0, 5.0).onFinishChange(reset);
   shapes.add(options, 'randomizeSpikiness').onFinishChange(reset);
+  shapes.add(options, 'spikeFrequency', 0.0, 10.0).onFinishChange(reset);
   reset();
 };
 

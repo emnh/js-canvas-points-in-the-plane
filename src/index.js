@@ -133,7 +133,7 @@ const main = function(options) {
     for (let x = 0; x < ws; x++) {
       for (let y = 0; y < hs; y++) {
         const idx = 4 * (y * ws + x);
-        const gidx = i * ws * hs + idx;
+        const gidx = 4 * i * ws * hs + idx;
         shapes[gidx + 0] = shape[idx + 0] * color.r;
         shapes[gidx + 1] = shape[idx + 1] * color.g;
         shapes[gidx + 2] = shape[idx + 2] * color.b;
@@ -177,7 +177,7 @@ const main = function(options) {
         const posY = shapeLocations[i * 2 + 1];
         if (x >= posX && x < posX + ws && y >= posY && y < posY + hs) {
           const idx = 4 * ((y - posY) * ws + (x - posX));
-          const gidx = i * ws * hs + idx;
+          const gidx = 4 * i * ws * hs + idx;
           r += shapes[gidx + 0];
           g += shapes[gidx + 1];
           b += shapes[gidx + 2];
@@ -215,6 +215,9 @@ const main = function(options) {
   }
   const m = w * h * 0.5;
   [avgr, avgg, avgb] = [m / (avgr == 0 ? m : avgr), m / (avgg == 0 ? m : avgg), m / (avgb == 0 ? m : avgb)];
+  if (!options.pointsEnabled) {
+    [avgr, avgg, avgb] = [1, 1, 1];
+  }
 
   const f = (x) => Math.max(0, Math.min(255, Math.floor(x * 255)));
   for (let x = 0; x < w; x++) {

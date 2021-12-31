@@ -254,10 +254,11 @@ const main = function(options) {
 
 	const ws = options.shapeWidth;
 	const hs = options.shapeHeight;
-  const shapeCount = 100;
+  const shapeCount = options.shapeCount;
+  const shapeVariations = options.shapeVariations;
   const shapeLocations = new Float32Array(shapeCount * 2);
   const shapeColors = new Float32Array(shapeCount * 3);
-	const shapes = new Float32Array(shapeCount * 4 * ws * hs);
+  const shapeSizes = new Float32Array(shapeCount);
   for (let i = 0; i < shapeCount; i++) {
     const shape = createShape(simplex, ws, hs);
     const color = {
@@ -265,22 +266,26 @@ const main = function(options) {
       g: Math.random(),
       b: Math.random()
     };
-    shapeLocations[i * 2] = Math.floor(Math.random() * w);
-    shapeLocations[i * 2 + 1] = Math.floor(Math.random() * h);
     shapeColors[i * 3 + 0] = color.r;
     shapeColors[i * 3 + 1] = color.g;
     shapeColors[i * 3 + 2] = color.b;
-    for (let x = 0; x < ws; x++) {
-      for (let y = 0; y < hs; y++) {
-        const idx = 4 * (y * ws + x);
-        const gidx = 4 * i * ws * hs + idx;
-        shapes[gidx + 0] = shape[idx + 0] * color.r;
-        shapes[gidx + 1] = shape[idx + 1] * color.g;
-        shapes[gidx + 2] = shape[idx + 2] * color.b;
-        shapes[gidx + 3] = shape[idx + 3];
-      }
+    shapeSizes[i] = 1.0;
+    if (options.shapeDistribution === 'Circles') {
+      const circleCount = options.shapeCircleCount;
+      const perCircle = Math.floor(shapeCount / circleCount);
+      const circle = Math.floor(i / perCircle);
+      const r = options.shapeCircleRadius * circle;
+      const angle = 2.0 * Math.PI * (i - circle * perCircle) / perCircle;
+      const x = Math.floor(0.5 * w + r * Math.cos(angle));
+      const y = Math.floor(0.5 * h + r * Math.sin(angle));
+      shapeLocations[i * 2] = x;
+      shapeLocations[i * 2 + 1] = y;
+      shapeSizes[i] /= (circleCount - circle + 1);
+    } else {
+      shapeLocations[i * 2] = Math.floor(Math.random() * w);
+      shapeLocations[i * 2 + 1] = Math.floor(Math.random() * h);
     }
-	}
+  }
 
 
   const gpu = new GPU.GPU();
@@ -301,8 +306,8 @@ const main = function(options) {
     const angle = Math.atan2(dy, dx) + Math.PI;
     const nangle = angle / Math.PI / 2.0;
     const c = 1.0;
-    const from = (initradius + spikiness * Math.abs(snoise3(c * angle, shapeSeed, 0.0))) * radius;
-    const to = (initradius + spikiness * Math.abs(snoise3(c * -angle, shapeSeed, 0.0))) * radius;
+    const from = (initRadius + spikiness * Math.abs(snoise3(c * angle, shapeSeed, 0.0))) * radius;
+    const to = (initRadius + spikiness * Math.abs(snoise3(c * -angle, shapeSeed, 0.0))) * radius;
     const vradius2 = lerp2(from, to, nangle);
     const currentRadius = Math.sqrt(dx * dx + dy * dy);
     const border = currentRadius >= vradius2 && currentRadius <= vradius2 + 1.0;
@@ -318,7 +323,7 @@ const main = function(options) {
   const process = gpu
     .createKernel(function (
       pointsX, pointsY, pointsColorR, pointsColorG, pointsColorB,
-      shapes, shapeLocations, shapeColors) {
+      shapeLocations, shapeColors, shapeSizes) {
       let r = 0.0;
       let g = 0.0;
       let b = 0.0;
@@ -344,21 +349,19 @@ const main = function(options) {
       const ws = this.constants.shapeWidth;
       const hs = this.constants.shapeHeight;
       for (let i = 0; i < this.constants.shapeCount; i++) {
+        const shapeVariationIndex = i % this.constants.shapeVariations;
         const posX = shapeLocations[i * 2];
         const posY = shapeLocations[i * 2 + 1];
-        if (x >= posX && x < posX + ws && y >= posY && y < posY + hs) {
-          const lx = x - posX;
-          const ly = y - posY;
-          const idx = 4 * (ly * ws + lx);
-          const gidx = 4 * i * ws * hs + idx;
-//          r += shapes[gidx + 0];
-//          g += shapes[gidx + 1];
-//          b += shapes[gidx + 2];
-//          a += shapes[gidx + 3];
-          const shapeSeed = i;
+        const size = shapeSizes[i];
+        const halfws = Math.floor(0.5 * ws * size);
+        const halfhs = Math.floor(0.5 * hs * size);
+        if (x >= posX - halfws && x < posX + halfws && y >= posY - halfhs && y < posY + halfhs) {
+          const lx = x - (posX - halfws);
+          const ly = y - (posY - halfhs);
+          const shapeSeed = shapeVariationIndex;
           const ar =
             createShapeGPU(
-              this.constants.initRadius, this.constants.spikiness, shapeSeed, ws, hs, lx, ly);
+              this.constants.initRadius, this.constants.spikiness, shapeSeed, ws * size, hs * size, lx, ly);
           r += ar * shapeColors[i * 3 + 0];
           g += ar * shapeColors[i * 3 + 1];
           b += ar * shapeColors[i * 3 + 2];
@@ -375,6 +378,7 @@ const main = function(options) {
         maxe,
         lightDecay: options.lightDecay,
         shapeCount,
+        shapeVariations,
         shapeWidth: ws,
         shapeHeight: hs,
         initRadius: options.initRadius,
@@ -386,7 +390,7 @@ const main = function(options) {
   const out =
     process(
       pointsX, pointsY, pointsColorR, pointsColorG, pointsColorB,
-      shapes, shapeLocations, shapeColors);
+      shapeLocations, shapeColors, shapeSizes);
 
   // Get normalize factor
   let [maxr, maxg, maxb] = [0.0, 0.0, 0.0];
@@ -434,6 +438,11 @@ const datgui = function() {
     pointsColor: [0, 0, 0, 0],
     lightDecay: 1.0,
     shapesEnabled: true,
+    shapeCount: 100,
+    shapeVariations: 10,
+    shapeDistribution: 'Random',
+    shapeCircleCount: 5,
+    shapeCircleRadius: 50.0,
     shapeWidth: 100,
     shapeHeight: 100,
     initRadius: 0.5,
@@ -442,6 +451,7 @@ const datgui = function() {
   const reset = function() {
     main(options);
   };
+  gui.width = 300;
   gui.remember(options);
   gui.add(options, 'seed').onFinishChange(reset);
   const size = gui.addFolder('Canvas Size');
@@ -458,6 +468,12 @@ const datgui = function() {
   shapes.add(options, 'shapesEnabled').onFinishChange(reset);
   shapes.add(options, 'shapeWidth', 0.0, 500.0).onFinishChange(reset);
   shapes.add(options, 'shapeHeight', 0.0, 500.0).onFinishChange(reset);
+  shapes.add(options, 'shapeCount', 0, 1000).onFinishChange(reset);
+  shapes.add(options, 'shapeVariations', 0, 1000).onFinishChange(reset);
+  shapes.add(options, 'shapeDistribution',
+    ['Random', 'RandomOffset', 'Uniform', 'Circles']).onFinishChange(reset);
+  shapes.add(options, 'shapeCircleCount', 0, 20).onFinishChange(reset);
+  shapes.add(options, 'shapeCircleRadius', 0, 500).onFinishChange(reset);
   shapes.add(options, 'initRadius', 0.0, 5.0).onFinishChange(reset);
   shapes.add(options, 'spikiness', 0.0, 5.0).onFinishChange(reset);
   reset();

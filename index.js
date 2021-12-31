@@ -1,7 +1,7 @@
 // Import stylesheets
 import './style.css';
 
-const GPU = require('gpu.js');
+import GPU from 'gpu.js';
 
 const w = 600;
 const h = 600;

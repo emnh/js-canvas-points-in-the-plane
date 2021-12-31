@@ -1,18 +1,39 @@
 const $ = require('jquery');
+const dat = require('dat.gui');
 import GPU from 'gpu.js';
 
-const main = function() {
-  const w = 800;
-  const h = 800;
+const main = function(options) {
 
-  const canvas = document.createElement('canvas');
+  console.log(options);
+  const w = Math.floor(parseInt(options.width));
+  const h = Math.floor(parseInt(options.height));
+
+  const first = $("#mainImage").length == 0;
+
+  const canvas = $("#mainImage")[0] || $('<canvas id="mainImage" />')[0];
 
   canvas.width = w;
   canvas.height = h;
 
-  document.body.appendChild(canvas);
+  if (first) {
+    const div = $("#main")[0] || $('<div id="main" />')[0];
+    $("body")
+      .css('margin', '0px')
+      .css('padding', '0px')
+      .append(div);
+    $("#main")
+      .css('width', '100%')
+      .css('height', '100vh')
+      .css('background', 'black')
+      .css('display', 'flex')
+      .css('justify-content', 'center')
+      .css('align-items', 'center')
+      .append(canvas);
+  }
 
   const ctx = canvas.getContext('2d');
+  $("#mainImage")
+    .css('border', '1px solid white')
 
   const data = ctx.createImageData(w, h);
 
@@ -32,8 +53,8 @@ const main = function() {
       b: Math.random(),
     };
     const point = {
-      x: Math.random() * w,
-      y: Math.random() * h,
+      x: Math.floor(Math.random() * w),
+      y: Math.floor(Math.random() * h),
       color: c,
     };
     points.push(point);
@@ -63,7 +84,7 @@ const main = function() {
         const d = Math.sqrt(dx * dx + dy * dy);
         const e = d / (this.constants.maxd * this.constants.pointCount);
         const power = 1.0;
-        const e2 = Math.pow(this.constants.maxe, power) / Math.pow(e, power);
+        const e2 = Math.pow(this.constants.maxe, power) / (e == 0.0 ? 1.0 : Math.pow(e, power));
         r += pointsColorR[i] * e2;
         g += pointsColorG[i] * e2;
         b += pointsColorB[i] * e2;
@@ -93,7 +114,7 @@ const main = function() {
     }
   }
   const m = w * h * 0.5;
-  [avgr, avgg, avgb] = [m / avgr, m / avgg, m / avgb];
+  [avgr, avgg, avgb] = [m / (avgr == 0 ? m : avgr), m / (avgg == 0 ? m : avgg), m / (avgb == 0 ? m : avgb)];
 
   const f = (x) => Math.max(0, Math.min(255, Math.floor(x * 255)));
   for (let x = 0; x < w; x++) {
@@ -110,4 +131,22 @@ const main = function() {
   ctx.putImageData(data, 0, 0);
 };
 
-$(main);
+const datgui = function() {
+  const gui = new dat.GUI();
+  gui.useLocalStorage = true;
+  const defsize = Math.min(window.innerWidth, window.innerHeight) - 100;
+  const options = {
+    width: defsize,
+    height: defsize
+  };
+  const reset = function() {
+    main(options);
+  };
+  const size = gui.addFolder('Canvas Size');
+  size.add(options, 'width', 0, 10000).onFinishChange(reset);
+  size.add(options, 'height', 0, 10000).onFinishChange(reset);
+  reset();
+};
+
+//$(main({width: 400, height: 400}));
+$(datgui);

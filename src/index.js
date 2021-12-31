@@ -119,51 +119,6 @@ const addNoiseFunctions = function(GPU) {
 	`);
 };
 
-const createShape = function (simplex, ws, hs) {
-  const colors = new Float32Array(4 * ws * hs);
-  const seed = new Date().getTime();
-  const initradius = Math.random() * 0.5;
-  const spikiness = Math.random() * 1.0;
-  for (let x = 0; x < ws; x++) {
-    for (let y = 0; y < hs; y++) {
-      const dx = x - 0.5 * ws;
-      const dy = y - 0.5 * hs;
-      const radius = 0.5 * Math.max(ws, hs);
-      const vradius =
-        (0.75 + 0.25 * Math.sin(10.0 * Math.atan2(dy, dx))) * radius;
-      const lerp = (x, y, a) => x * (1 - a) + y * a;
-      const dlerp = (x, a) => lerp(x, x, a);
-      const angle = Math.atan2(dy, dx) + Math.PI;
-      const nangle = angle / Math.PI / 2.0;
-      const c = 1.0;
-      const vradius2 = lerp(
-        (initradius + spikiness * Math.abs(simplex.noise2D(c * angle, seed))) * radius,
-        (initradius + spikiness * Math.abs(simplex.noise2D(c * -angle, seed))) * radius,
-        nangle
-      );
-      const currentRadius = Math.sqrt(dx * dx + dy * dy);
-      const innerShape = currentRadius <= vradius2;
-      const border =
-        currentRadius >= vradius2 && currentRadius <= vradius2 + 1.0;
-      // const idx = 4 * (y * w + x);
-      const bc = () =>
-        0.5 * (simplex.noise3D((0.5 * x) / ws, (0.5 * y) / ws, seed) + 1.0);
-
-      const r = innerShape ? 0.0 : 1.0;
-      const g = border ? 1.0 : 0.0;
-      const b = innerShape ? bc() : 0.0;
-      const a = innerShape || border ? 1.0 : 0.0;
-      const t = 4 * (y * ws + x);
-      const shape = innerShape ? bc() : 0.0;
-      colors[t + 0] = shape;
-      colors[t + 1] = shape;
-      colors[t + 2] = shape;
-      colors[t + 3] = 1.0;
-    }
-  }
-  return colors;
-};
-
 const main = function(options) {
 
   seedrandom(options.seed, { global: true });
@@ -209,7 +164,6 @@ const main = function(options) {
   const maxShapesPerPixel = 10;
   const shapeAllocations = new Float32Array(Math.ceil(maxShapesPerPixel * Math.ceil(w / ws) * Math.ceil(h / hs)));
   for (let i = 0; i < shapeCount; i++) {
-    const shape = createShape(simplex, ws, hs);
     const color = {
       r: options.shapesRandomColor ? Math.random() : options.shapesColor[0],
       g: options.shapesRandomColor ? Math.random() : options.shapesColor[1],
@@ -284,9 +238,8 @@ const main = function(options) {
     const angle = Math.atan2(dy, dx) + Math.PI;
     const nangle = angle / Math.PI / 2.0;
     const c = spikeFrequency;
-    const from = (initRadius + spikiness * Math.abs(snoise3(c * angle, shapeSeed, 0.0))) * radius;
-    const to = (initRadius + spikiness * Math.abs(snoise3(c * -angle, shapeSeed, 0.0))) * radius;
-    const vradius2 = lerp2(from, to, nangle);
+    const rnoise = 0.5 * (snoise3(Math.sin(c * angle), shapeSeed, 0.0) + 1.0);
+    const vradius2 = (initRadius + spikiness * rnoise) * radius;
     const currentRadius = Math.sqrt(dx * dx + dy * dy);
     const border = currentRadius >= vradius2 && currentRadius <= vradius2 + 1.0;
     const bc1 = snoise3((0.5 * x) / ws, (0.5 * y) / ws, shapeSeed);
@@ -461,7 +414,7 @@ const main = function(options) {
   const elapsed = after - before;
   console.log("Time elapsed:", elapsed / 1000.0);
 
-  const out = temp.toArray();
+  //const out = temp.toArray();
   temp.delete();
 
   // Get normalize factor

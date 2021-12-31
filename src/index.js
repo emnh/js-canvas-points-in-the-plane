@@ -17,35 +17,12 @@ const addNoiseFunctions = function(GPU) {
 	//               https://github.com/ashima/webgl-noise
 	//
 
-//  GPU.addNativeFunction('mod2893',
-//  `
-//    vec3 mod2893(vec3 x) {
-//      return x - floor(x * (1.0 / 289.0)) * 289.0;
-//    }
-//  `
-//  );
-
-//  GPU.addNativeFunction('mod2894',
-//  `
-//  vec4 mod2894(vec4 x) {
-//    return x - floor(x * (1.0 / 289.0)) * 289.0;
-//  }
-//  `);
-
-//  GPU.addNativeFunction('permute',
-//  `
-//  vec4 permute(vec4 x) {
-//       return mod2894(((x*34.0)+1.0)*x);
-//  }
-//  `);
-
-//  GPU.addNativeFunction('taylorInvSqrt',
-//  `
-//  vec4 taylorInvSqrt(vec4 r)
-//  {
-//    return 1.79284291400159 - 0.85373472095314 * r;
-//  }
-//  `);
+  GPU.addNativeFunction('rand',
+  `
+	float rand(vec2 co){
+			return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+	}
+	`);
 
 	GPU.addNativeFunction('snoise',
 	`
@@ -273,14 +250,24 @@ const main = function(options) {
     if (options.shapeDistribution === 'Circles') {
       const circleCount = options.shapeCircleCount;
       const perCircle = Math.floor(shapeCount / circleCount);
-      const circle = Math.floor(i / perCircle);
+      const circle = Math.floor(i / perCircle) + 1;
       const r = options.shapeCircleRadius * circle;
       const angle = 2.0 * Math.PI * (i - circle * perCircle) / perCircle;
       const x = Math.floor(0.5 * w + r * Math.cos(angle));
       const y = Math.floor(0.5 * h + r * Math.sin(angle));
       shapeLocations[i * 2] = x;
       shapeLocations[i * 2 + 1] = y;
-      shapeSizes[i] /= (circleCount - circle + 1);
+      shapeSizes[i] /= (circleCount - circle + 2);
+    } else if (options.shapeDistribution === 'UniformRandomOffset') {
+      const sq = Math.ceil(Math.sqrt(shapeCount));
+      const sq2 = Math.floor(Math.sqrt(shapeCount));
+      const wstep = Math.floor(w / sq2);
+      const hstep = Math.floor(h / sq2);
+      const rstep = options.shapeCircleRadius;
+      const x = Math.floor(i / sq) * hstep + rstep * (Math.random() - 0.5) + 0.5 * ws;
+      const y = Math.floor(i % sq) * wstep + rstep * (Math.random() - 0.5) + 0.5 * hs;
+      shapeLocations[i * 2] = x;
+      shapeLocations[i * 2 + 1] = y;
     } else {
       shapeLocations[i * 2] = Math.floor(Math.random() * w);
       shapeLocations[i * 2 + 1] = Math.floor(Math.random() * h);
@@ -356,37 +343,48 @@ const main = function(options) {
         }
       }
       a = 1.0;
-      const ws = this.constants.shapeWidth;
-      const hs = this.constants.shapeHeight;
-      for (let i = 0; i < this.constants.shapeCount; i++) {
-        const shapeVariationIndex = i % this.constants.shapeVariations;
-        const posX = shapeLocations[i * 2];
-        const posY = shapeLocations[i * 2 + 1];
-        const size = shapeSizes[i];
-        const halfws = Math.floor(0.5 * ws * size);
-        const halfhs = Math.floor(0.5 * hs * size);
-        //if (x >= posX - halfws && x < posX + halfws && y >= posY - halfhs && y < posY + halfhs) {
-//          const lx = x - (posX - halfws);
-//          const ly = y - (posY - halfhs);
-          const lx = x - posX;
-          const ly = y - posY;
-          const shapeSeed = shapeVariationIndex;
+      if (this.constants.shapesEnabled) {
+        const ws = this.constants.shapeWidth;
+        const hs = this.constants.shapeHeight;
+        for (let i = 0; i < this.constants.shapeCount; i++) {
+          const shapeVariationIndex = i % this.constants.shapeVariations;
+          const posX = shapeLocations[i * 2];
+          const posY = shapeLocations[i * 2 + 1];
+          const size = shapeSizes[i];
+          const halfws = Math.floor(0.5 * ws * size);
+          const halfhs = Math.floor(0.5 * hs * size);
+          //if (x >= posX - halfws && x < posX + halfws && y >= posY - halfhs && y < posY + halfhs) {
+  //          const lx = x - (posX - halfws);
+  //          const ly = y - (posY - halfhs);
+            const lx = x - posX;
+            const ly = y - posY;
+            const shapeSeed = shapeVariationIndex;
 
-          const ar =
-            createShapeGPU(
-              this.constants.initRadius, this.constants.spikiness, shapeSeed, ws * size, hs * size, lx, ly);
-          r += ar * shapeColors[i * 3 + 0];
-          g += ar * shapeColors[i * 3 + 1];
-          b += ar * shapeColors[i * 3 + 2];
-          a += ar;
+            const initRadiusMul = this.constants.randomizeInitRadius ? rand([5 * i, 19 * i]) : 1.0;
+            const spikinessMul = this.constants.randomizeSpikiness ? rand([13 * i, 7 * i]) : 1.0;
+            const ar =
+              createShapeGPU(
+                initRadiusMul * this.constants.initRadius,
+                spikinessMul * this.constants.spikiness,
+                shapeSeed,
+                ws * size,
+                hs * size,
+                lx,
+                ly);
+            r += ar * shapeColors[i * 3 + 0];
+            g += ar * shapeColors[i * 3 + 1];
+            b += ar * shapeColors[i * 3 + 2];
+            a += ar;
 
-        //}
+          //}
+        }
       }
       return [r, g, b, 1];
     },
     {
       constants: {
         pointsEnabled: options.pointsEnabled,
+        shapesEnabled: options.shapesEnabled,
         pointCount,
         maxd,
         maxe,
@@ -396,7 +394,9 @@ const main = function(options) {
         shapeWidth: ws,
         shapeHeight: hs,
         initRadius: options.initRadius,
-        spikiness: options.spikiness
+        spikiness: options.spikiness,
+        randomizeInitRadius: options.randomizeInitRadius,
+        randomizeSpikiness: options.randomizeSpikiness
       },
       output: [w, h]
     });
@@ -484,9 +484,10 @@ const main = function(options) {
   const lr = 0;
   const lg = 0;
   const lb = 0;
-  const mr = rs[ubound];
-  const mg = gs[ubound];
-  const mb = bs[ubound];
+  const mm = Math.max(Math.max(rs[ubound], gs[ubound]), bs[ubound]);
+  const mr = mm;
+  const mg = mm;
+  const mb = mm;
   const dr = mr - lr;
   const dg = mg - lg;
   const db = mb - lb;
@@ -537,7 +538,9 @@ const datgui = function() {
     shapeWidth: 100,
     shapeHeight: 100,
     initRadius: 0.5,
-    spikiness: 0.5
+    randomizeInitRadius: false,
+    spikiness: 0.5,
+    randomizeSpikiness: false
   };
   const reset = function() {
     main(options);
@@ -563,11 +566,13 @@ const datgui = function() {
   shapes.add(options, 'shapeCount', 0, 1000).onFinishChange(reset);
   shapes.add(options, 'shapeVariations', 0, 1000).onFinishChange(reset);
   shapes.add(options, 'shapeDistribution',
-    ['Random', 'RandomOffset', 'Uniform', 'Circles']).onFinishChange(reset);
+    ['Random', 'UniformRandomOffset', 'Circles']).onFinishChange(reset);
   shapes.add(options, 'shapeCircleCount', 0, 20).onFinishChange(reset);
   shapes.add(options, 'shapeCircleRadius', 0, 500).onFinishChange(reset);
   shapes.add(options, 'initRadius', 0.0, 5.0).onFinishChange(reset);
+  shapes.add(options, 'randomizeInitRadius').onFinishChange(reset);
   shapes.add(options, 'spikiness', 0.0, 5.0).onFinishChange(reset);
+  shapes.add(options, 'randomizeSpikiness').onFinishChange(reset);
   reset();
 };
 

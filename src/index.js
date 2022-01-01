@@ -490,7 +490,7 @@ const main = function(options) {
 const datgui = function() {
   const gui = new dat.GUI();
   gui.useLocalStorage = true;
-  const defsize = Math.min(window.innerWidth, window.innerHeight) - 100;
+  const defsize = Math.min(600, Math.min(window.innerWidth, window.innerHeight) - 100);
   const options = {
     seed: 'hello2',
     width: defsize,
@@ -500,14 +500,14 @@ const datgui = function() {
     shapesEnabled: true,
     shapeInteriors: false,
     shapesRandomColor: true,
-    shapesColor: [0, 0, 0, 0],
+    shapesColor: [0, 0, 1, 0],
+    shapeWidth: 200,
+    shapeHeight: 200,
     shapeCount: 100,
     shapeVariations: 10,
     shapeDistribution: 'Circular',
-    shapeCircleCount: 5,
-    shapeCircleRadius: 50.0,
-    shapeWidth: 200,
-    shapeHeight: 200,
+    shapeCircleCount: 10,
+    shapeCircleRadius: 20.0,
     initRadius: 0.5,
     randomizeInitRadius: false,
     spikiness: 0.5,

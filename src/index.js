@@ -516,6 +516,14 @@ const datgui = function() {
     randomizeSpikiness: false,
 		spikeFrequency: 8.0
   };
+  if (defsize < 600) {
+    options.width = 250;
+    options.height = 250;
+    options.brightness = 1.5;
+    options.shapeWidth = 100;
+    options.shapeHeight = 100;
+    options.shapeCircleRadius = 10.0;
+  }
   const reset = function() {
     main(options);
   };

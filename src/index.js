@@ -128,9 +128,9 @@ const main = function(options) {
   const w = Math.floor(parseInt(options.width));
   const h = Math.floor(parseInt(options.height));
 
+  $("#mainImage").remove();
   const first = $("#mainImage").length == 0;
-
-  const canvas = $("#mainImage")[0] || $('<canvas id="mainImage" />')[0];
+  const canvas = first ? $('<canvas id="mainImage" />')[0] : $("#mainImage")[0];
 
   canvas.width = w;
   canvas.height = h;
@@ -142,18 +142,19 @@ const main = function(options) {
       .css('padding', '0px')
       .append(div);
     $("#main")
-			.css('position', 'absolute')
-      .css('top', '0px')
-      .css('z-index', '-1')
-      .css('width', '100%')
-      .css('height', '100vh')
-      .css('background', 'black')
-      .css('display', 'flex')
-      .css('justify-content', 'center')
-      .css('align-items', 'center')
       .append(canvas);
   }
 
+  $("#main")
+    .css('position', 'absolute')
+    .css('top', '0px')
+    .css('z-index', '-1')
+    .css('width', '100%')
+    .css('height', '100vh')
+    .css('background', 'black')
+    .css('display', 'flex')
+    .css('justify-content', 'center')
+    .css('align-items', 'center')
   $("#mainImage")
     .css('border', '1px solid white')
 
@@ -247,7 +248,7 @@ const main = function(options) {
     const border = currentRadius >= vradius2 && currentRadius <= vradius2 + 1.0;
     const bc1 = snoise3((0.5 * x) / ws, (0.5 * y) / ws, shapeSeed);
     const bc2 = 0.5 * bc1 + 1.0;
-          
+
     // Light emission from shape
     const da = Math.max(1.0, Math.abs(currentRadius - vradius2));
     const d = currentRadius <= vradius2 && this.constants.shapeInteriors ? 1.0 : da;

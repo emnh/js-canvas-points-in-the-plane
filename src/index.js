@@ -142,6 +142,9 @@ const main = function(options) {
       .css('padding', '0px')
       .append(div);
     $("#main")
+			.css('position', 'absolute')
+      .css('top', '0px')
+      .css('z-index', '-1')
       .css('width', '100%')
       .css('height', '100vh')
       .css('background', 'black')
@@ -489,27 +492,27 @@ const datgui = function() {
   gui.useLocalStorage = true;
   const defsize = Math.min(window.innerWidth, window.innerHeight) - 100;
   const options = {
-    seed: 'hello',
+    seed: 'hello2',
     width: defsize,
     height: defsize,
     brightness: 1,
-    lightDecay: 1.0,
+    lightDecay: 1.2,
     shapesEnabled: true,
     shapeInteriors: false,
     shapesRandomColor: true,
     shapesColor: [0, 0, 0, 0],
     shapeCount: 100,
     shapeVariations: 10,
-    shapeDistribution: 'Random',
+    shapeDistribution: 'Circular',
     shapeCircleCount: 5,
     shapeCircleRadius: 50.0,
-    shapeWidth: 100,
-    shapeHeight: 100,
+    shapeWidth: 200,
+    shapeHeight: 200,
     initRadius: 0.5,
     randomizeInitRadius: false,
     spikiness: 0.5,
     randomizeSpikiness: false,
-		spikeFrequency: 2.0
+		spikeFrequency: 8.0
   };
   const reset = function() {
     main(options);
